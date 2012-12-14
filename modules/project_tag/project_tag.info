@@ -1,0 +1,11 @@
+name = Project Tag Field
+description = Provides a sanitised single project tag that can be used to create links in Views.
+core = 7.x
+package = University of Melbourne
+
+dependencies[] = unimelb_arts
+dependencies[] = field
+dependencies[] = taxonomy
+dependencies[] = views
+
+files[] = project_tag_handler_field.inc
