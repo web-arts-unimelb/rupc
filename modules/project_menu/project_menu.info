@@ -1,0 +1,4 @@
+name = Project menu 
+description = Add sub menus (partners, people, events, etc) to a project page. 
+core = 7.x
+package = University of Melbourne

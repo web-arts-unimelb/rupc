@@ -1,0 +1,160 @@
+<?php
+/**
+
+* Implements hook_menu()
+*
+* Generate a menu "research" and add
+* sub-items (Partners, people, events, etc) below each one.
+*
+*/
+
+function project_menu_menu() 
+{
+	$menu_items = array();
+	
+	$sub_items = _get_sub_menu_items("Research");
+	
+	while($sub_item = $sub_items->fetchAssoc()) 
+	{
+		_build_partner_menu_item($menu_items, $sub_item);	
+  }
+  
+  return $menu_items;
+}
+
+function _get_menu_link_by_link_title($link_title="")
+{
+	$result = db_select('menu_links', 'n')
+		->fields('n')
+		->condition('n.link_title', $link_title, '=')
+		->range(0, 1)
+		->execute()
+		->fetchAssoc();
+
+	return $result;
+}
+
+function _get_sub_menu_items($link_title="")
+{	
+	$menu_link = _get_menu_link_by_link_title($link_title);
+	$mlid = $menu_link["mlid"];
+	
+	$result = db_select('menu_links', 'n')
+		->fields('n')
+		->condition('n.plid', $mlid, '=')
+		->execute();
+
+	return $result;
+}
+
+
+function _build_partner_menu_item(&$return_menu_items, $menu_item)
+{
+	$node_title = $menu_item["link_title"];
+	$tag_name = "Partner";
+	$entity_type = "node";
+	$node_type = "Page";
+
+	$view_name = "partners_page";
+
+	if(_is_it_tagged($node_title, $tag_name, $entity_type, $node_type))
+	{
+		global $base_url;
+		$link_title = "partners";	
+		$the_url = $base_url. url($menu_item["link_path"]). "/". $link_title;
+		
+
+		$return_menu_items[$the_url] = array(
+			'title' => $link_title,
+			'type' => MENU_NORMAL_ITEM,
+			'menu_name' => 'main-menu',
+		
+			'page callback' => 'project_menu_page_callback',
+			'page arguments' => array($view_name, array($node_title)),
+		
+			'plid' => $menu_item["mlid"],
+			'access arguments' => array('access content'), 
+			'expanded' => TRUE,
+		);
+	}
+}
+
+function project_menu_page_callback($view_name, $args) 
+{
+	$view = views_get_view($view_name);
+
+	if(empty($view)) 
+	{
+		drupal_set_message(t('The required view %view is not present. Please contact a site administrator', array('%view' => $view_name)), 'error');
+
+		return '';
+	}
+
+	//$view->set_display($display);
+	$view->set_arguments($args);
+	$view->execute();
+	
+	drupal_set_title($view->get_title());
+	return $view->render();
+}
+
+
+function _is_it_tagged($node_title, $other_tag_name, $entity_type, $node_type)
+{
+	$project_tag_name = $node_title;
+	$node = _get_node($node_type, $node_title);
+	
+	// e.g. This assume a page is only tagged with project and partner (2 tags).
+	$project_terms = taxonomy_get_term_by_name($project_tag_name, "tags");
+	$project_term = current($project_terms);
+	
+	$other_terms = taxonomy_get_term_by_name($other_tag_name, "tags");
+	$other_term = current($other_terms);
+	
+	$project_tag_rows = _get_shared_tags_rows($project_term->tid, $entity_type, $node_type);
+	while($project_tag_row = $project_tag_rows->fetchAssoc())
+	{
+		$other_tag_rows = _get_shared_tags_rows($other_term->tid, $entity_type, $node_type);
+		while($other_tag_row = $other_tag_rows->fetchAssoc())
+		{
+			if($other_tag_row->entity_id == $project_tag_row->entity_id)
+			{
+				return true;
+			}
+		}
+	}
+	
+	return false;
+}
+
+
+function _get_node($node_type, $node_title)
+{
+	$query = new EntityFieldQuery();
+  $entities = $query->entityCondition('entity_type', 'node')
+		->propertyCondition('type', $node_type)
+		->propertyCondition('title', $node_title)
+		->propertyCondition('status', 1)
+		->range(0,1)
+		->execute();
+
+  if(!empty($entities['node'])) 
+  {
+    $node = node_load(current(array_keys($entities['node'])));
+  }
+
+	return $node;
+}
+
+
+function _get_shared_tags_rows($tid, $entity_type, $node_type)
+{
+	$result = db_select('field_data_field_shared_tags', 't')
+		->fields('t')
+		->condition('t.entity_type', $entity_type)
+		->condition('t.bundle', $node_type)
+		->condition('t.field_shared_tags_tid', $tid)
+		->execute();
+		
+	return $result;
+}
